@@ -12,7 +12,8 @@ TAGGER_MAPPING_TABLE = {
 
 RULES = [
     # tragger, command, syntax, output
-    ('k', 'c',  '에어컨|NNG', 'aircon')
+    # command - c:contains
+    ('k', 'c',  '에어컨|NNG', {'speech_act':'aircon'})
 ]
 
 
@@ -20,9 +21,7 @@ def check(sentence):
     pos_res = pos.run_all(sentence)
     pprint( pos_res )
 
-    res = {
-        'sent':sentence
-    }
+    res = {}
 
     # 여기서 룰첵을 한 결과를 반환해야 함.
     # 알맞은 형태소분석기별로 문법을 따로 적용하는게 나을듯함.
@@ -45,14 +44,16 @@ def check(sentence):
             if tagger!=r_tag:
                 continue
 
-            # command
             # syntax check
+            # contain인 경우
             for morp in morps:
-                # contain인 경우에는,
-                if morp == syntax:
-                    res['speech_act'] = output
-                    return res
+                if morp == syntax and command == 'c':
+                    res = {**res, **output} #join
 
 
-    res['speech_act']='not_understanding'
+    # 결과가 없으면
+    if not res:
+        res['speech_act']='not_understanding'
+
+    res['sent'] = sentence
     return res
