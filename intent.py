@@ -4,7 +4,7 @@
 import numpy as np
 import tensorflow as tf
 import pandas as pd
-from konlpy.tag import Mecab
+from konlpy.tag import Mecab, Twitter
 from matplotlib.image import imread, imsave
 import matplotlib.pyplot as plt
 from gensim.models import word2vec
@@ -39,24 +39,27 @@ filter_sizes = [1,2,3,4,5,1,2,3,4,5,1,2,3,4,5] #0.971
 #filter_sizes = [1,2,3,4,5,2,3,4,5,2,3,4,5] #0.969
 num_filters = len(filter_sizes)
 
+# pos tagger
+pos_tagger = Mecab('/usr/local/lib/mecab/dic/mecab-ko-dic') #0.971 & fast
+#pos_tagger = Twitter() #0.949 & slow
+
 
 def log(*args):
 	if DEBUG:
 		print(*args)
 
 def train_vector_model(data_list):
-    mecab = Mecab('/usr/local/lib/mecab/dic/mecab-ko-dic')
     str_buf = data_list['encode']
-    pos1 = mecab.pos(''.join(str_buf))
+    pos1 = pos_tagger.pos(''.join(str_buf))
     log("pos1:", pos1)
     pos2 = ' '.join(list(map(lambda x : '\n' if x[1] in ['SF'] else x[0], pos1))).split('\n')
     log("pos2:", pos2)
 
-    morphs = list(map(lambda x : mecab.morphs(x) , pos2))
+    morphs = list(map(lambda x : pos_tagger.morphs(x) , pos2))
 
     # morphs = []
     # for sentence in pos2:
-    #     for pos in mecab.pos(sentence):
+    #     for pos in pos_tagger.pos(sentence):
     #         morphs.append('/'.join(pos))
 
     log("morphs:", morphs)
@@ -80,9 +83,8 @@ def load_csv(data_path):
     return df_csv_read
 
 def extract_features(text):
-    mecab = Mecab('/usr/local/lib/mecab/dic/mecab-ko-dic')
     res=[]
-    raw_pos = mecab.pos(text)
+    raw_pos = pos_tagger.pos(text)
     log('pos:', raw_pos)
     for pos in raw_pos:
         # https://docs.google.com/spreadsheets/d/1OGAjUvalBuX-oZvZ_-9tEfYD2gQe7hTGsgUpiiBSXI8/edit#gid=0
