@@ -9,6 +9,9 @@ from matplotlib.image import imread, imsave
 import matplotlib.pyplot as plt
 from gensim.models import word2vec
 import os, sys
+import time
+import telepot
+from pprint import pprint
 
 
 DEBUG = True
@@ -88,14 +91,16 @@ def extract_features(text):
     log('pos:', raw_pos)
     for pos in raw_pos:
         # https://docs.google.com/spreadsheets/d/1OGAjUvalBuX-oZvZ_-9tEfYD2gQe7hTGsgUpiiBSXI8/edit#gid=0
+
         # 명사와 동사면 충분할듯?
+        # 명사와 동사만 넣을 경우에는 0.876
         # if pos[1] in ['NNG', 'NNP', 'VV', 'VX']:
         # 	res.append(pos[0])
         # elif pos[1].startswith('V'):
         # 	res.append(pos[0])
 
         res.append(pos[0]) # 그냥 모두 다 넣자.
-        #res.append( '/'.join(pos) )
+        #res.append( '/'.join(pos) ) # flatten
     return res
 
 def embed(data) :
@@ -261,6 +266,25 @@ def predict(test_data) :
 
     return np.argmax(y)
 
+def handleMessage(msg):
+    content_type, chat_type, chat_id = telepot.glance(msg)
+    if content_type != 'text':
+        sendMessage(chat_id, '난 텍스트 이외의 메시지는 처리하지 못해요.')
+        return
+
+    try:
+        name = msg["from"]["last_name"] + msg["from"]["first_name"]
+    except:
+        name = ""
+
+    text = msg['text']
+    log( chat_id, name, text )
+
+    y_index = predict(np.array(inference_embed(text)).flatten())
+    msg = y_inv_list[y_index]
+    print( msg )
+    bot.sendMessage(chat_id, msg)
+
 
 if __name__=='__main__':
     df = pd.DataFrame.from_csv('data.tsv', sep='\t', header=None)
@@ -362,9 +386,23 @@ if __name__=='__main__':
     finally:
         sess.close()
 
-    while True:
-        text = input("> ")
-        if not text:
-            break
-        y_index = predict(np.array(inference_embed(text)).flatten())
-        print( y_inv_list[y_index] )
+    # arg가 있으면 토큰이 있다고 생각하고, 없으면 그냥 input으로 동작.
+    if len(sys.argv)>1:
+        TOKEN = sys.argv[1]
+        print('received token :', TOKEN)
+
+        bot = telepot.Bot(TOKEN)
+        pprint( bot.getMe() )
+
+        bot.message_loop(handleMessage)
+        print('Listening...')
+        while 1:
+            time.sleep(10)
+
+    else:
+        while True:
+            text = input("> ")
+            if not text:
+                break
+            y_index = predict(np.array(inference_embed(text)).flatten())
+            print( y_inv_list[y_index] )
