@@ -287,6 +287,9 @@ def handleMessage(msg):
 
 
 if __name__=='__main__':
+    # data.tsv는 아래와 같은 "speech_act \t 예문" 형식이어야 함.
+    #다중검색    여러 상품 찾기
+    #행사상품문의  행사 상품만 알림 받고 싶어요
     df = pd.DataFrame.from_csv('data.tsv', sep='\t', header=None)
 
     # speech_act distinct count check
