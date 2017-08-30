@@ -336,55 +336,62 @@ if __name__=='__main__':
     model = train_vector_model(train_data_list)
     log(model)
 
-    try:
-        # get Data
-        labels_train, labels_test, data_filter_train, data_filter_test = get_test_data()
-        # log(labels_train)
-        # log(labels_test)
-        # log(data_filter_train)
-        # log(data_filter_test)
+    # pass 입력인자가 있으면 훈련과정을 건너뜀.
+    bPass=  False
+    for argv in sys.argv:
+        if argv=='pass':
+            bPass = True
 
-        # reset Graph
-        tf.reset_default_graph()
+    if not bPass:
+        try:
+            # get Data
+            labels_train, labels_test, data_filter_train, data_filter_test = get_test_data()
+            # log(labels_train)
+            # log(labels_test)
+            # log(data_filter_train)
+            # log(data_filter_test)
 
-        # Create Session
-        sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth =True)))
-        # create graph
-        if(filter_type == 'single') :
-            accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1 = create_s_graph(train=True)
-        else :
-            accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1 = create_m_graph(train=True)
+            # reset Graph
+            tf.reset_default_graph()
 
-        # set saver
-        saver = tf.train.Saver(tf.all_variables())
-        # initialize the variables
-        sess.run(tf.global_variables_initializer())
+            # Create Session
+            sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth =True)))
+            # create graph
+            if(filter_type == 'single') :
+                accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1 = create_s_graph(train=True)
+            else :
+                accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1 = create_m_graph(train=True)
 
-        # training the MLP
-        for i in range(500):
-            sess.run(train_step, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 0.7})
-            if i%10 == 0:
-                train_accuracy = sess.run(accuracy, feed_dict={x:data_filter_train, y_target: labels_train, keep_prob: 1})
-                log("step %d, training accuracy: %.3f"%(i, train_accuracy))
+            # set saver
+            saver = tf.train.Saver(tf.all_variables())
+            # initialize the variables
+            sess.run(tf.global_variables_initializer())
 
-        # for given x, y_target data set
-        log("test accuracy: %g"% sess.run(accuracy, feed_dict={x:data_filter_test, y_target: labels_test, keep_prob: 1}))
+            # training the MLP
+            for i in range(500):
+                sess.run(train_step, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 0.7})
+                if i%10 == 0:
+                    train_accuracy = sess.run(accuracy, feed_dict={x:data_filter_train, y_target: labels_train, keep_prob: 1})
+                    log("step %d, training accuracy: %.3f"%(i, train_accuracy))
 
-        # show weight matrix as image
-        weight_vectors = sess.run(W_conv1, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 1.0})
-        #show_layer(weight_vectors)
+            # for given x, y_target data set
+            log("test accuracy: %g"% sess.run(accuracy, feed_dict={x:data_filter_test, y_target: labels_test, keep_prob: 1}))
 
-        # Save Model
-        path = './model/'
-        if not os.path.exists(path):
-            os.makedirs(path)
-            log("path created")
-        saver.save(sess, path)
-        log("model saved")
-    except Exception as e:
-        raise Exception ("error on training: {0}".format(e))
-    finally:
-        sess.close()
+            # show weight matrix as image
+            weight_vectors = sess.run(W_conv1, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 1.0})
+            #show_layer(weight_vectors)
+
+            # Save Model
+            path = './model/'
+            if not os.path.exists(path):
+                os.makedirs(path)
+                log("path created")
+            saver.save(sess, path)
+            log("model saved")
+        except Exception as e:
+            raise Exception ("error on training: {0}".format(e))
+        finally:
+            sess.close()
 
     # arg가 있으면 토큰이 있다고 생각하고, 없으면 그냥 input으로 동작.
     if len(sys.argv)>1:
