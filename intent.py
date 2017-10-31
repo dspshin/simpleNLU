@@ -30,12 +30,6 @@ encode_length = 7
 # onehot과 wordvec 사용시의 learning rate는 전혀 다름.
 learning_rate = 1e-3
 
-#embed_type = "onehot"
-embed_type = "wordvec"
-
-# Choose multi test
-filter_type = "multi"
-
 #filter_sizes = [1,2,3,4,1,2,3,4,1,2,3,4] #0.965
 filter_sizes = [1,2,3,4,5,1,2,3,4,5,1,2,3,4,5] #0.971
 #filter_sizes = [1,2,3,4,5,2,3,4,5,3,4,5,4,5,2,3,4,5] #0.972
@@ -111,33 +105,21 @@ def embed(data) :
 		encode_raw = list(map(lambda x : encode_raw[x] if x < len(encode_raw) else '#', range(encode_length)))
 		log('morphs:', encode_raw)
 
-		if(embed_type == 'onehot') :
-			bucket = np.zeros(vector_size, dtype=float).copy()
-			input = np.array(list(map(lambda x : onehot_vectorize(bucket, x) if x in model.wv.index2word else np.zeros(vector_size,dtype=float) , encode_raw)))
-		else :
-			input = np.array(list(map(lambda x : model[x] if x in model.wv.index2word else np.zeros(vector_size,dtype=float) , encode_raw)))
+
+		input = np.array(list(map(lambda x : model[x] if x in model.wv.index2word else np.zeros(vector_size,dtype=float) , encode_raw)))
 		inputs.append(input.flatten())
 
 	for decode_raw in data['decode']:
-		# onehot
 		label = np.zeros(label_size, dtype=float)
 		np.put(label, decode_raw, 1)
 		labels.append(label)
 	return inputs, labels
 
-def onehot_vectorize(bucket, x):
-    np.put(bucket, model.wv.index2word.index(x),1)
-    return bucket
-
 def inference_embed(data) :
     encode_raw = extract_features(data)
     encode_raw = list(map(lambda x : encode_raw[x] if x < len(encode_raw) else '#', range(encode_length)))
     log( 'morphs:', encode_raw )
-    if(embed_type == 'onehot') :
-        bucket = np.zeros(vector_size, dtype=float).copy()
-        input = np.array(list(map(lambda x : onehot_vectorize(bucket, x) if x in model.wv.index2word else np.zeros(vector_size,dtype=float) , encode_raw)))
-    else :
-        input = np.array(list(map(lambda x : model[x] if x in model.wv.index2word else np.zeros(vector_size,dtype=float) , encode_raw)))
+    input = np.array(list(map(lambda x : model[x] if x in model.wv.index2word else np.zeros(vector_size,dtype=float) , encode_raw)))
     return input
 
 def create_m_graph(train=True):
@@ -182,8 +164,8 @@ def create_m_graph(train=True):
     h_pool_flat = tf.reshape(h_pool, [-1, num_filters_total])
 
     # Add dropout
-    keep_prob = 1.0
-    if(train) :
+    keep_prob = 0.8
+    if train:
         keep_prob = tf.placeholder("float", name="keep_prob")
         h_pool_flat = tf.nn.dropout(h_pool_flat, keep_prob)
 
@@ -210,7 +192,7 @@ def create_m_graph(train=True):
 
     return accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1
 
-def show_layer(weight_list) :
+def show_layer(weight_list):
     if(filter_type == 'multi') :
         show = np.array(weight_list).reshape(num_filters, filter_sizes[np.argmax(filter_sizes)], vector_size)
         for i, matrix in enumerate(show) :
@@ -229,17 +211,14 @@ def get_test_data():
     test_data, test_label = embed(load_csv(train_data_list))
     return train_label, test_label, train_data, test_data
 
-def predict(test_data) :
+def predict(test_data):
     try :
         # reset Graph
         tf.reset_default_graph()
         # Create Session
         sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth =True)))
         # create graph
-        if(filter_type == 'single') :
-            _, x, _, _, _, y, _, _ = create_s_graph(train=False)
-        else :
-            _, x, _, _, _, y, _, _ = create_m_graph(train=False)
+        _, x, _, _, _, y, _, _ = create_m_graph(train=False)
 
         # initialize the variables
         sess.run(tf.global_variables_initializer())
@@ -248,10 +227,11 @@ def predict(test_data) :
         saver = tf.train.Saver()
 
         # Restore Model
-        path = './model/'
-        if os.path.exists(path):
-            saver.restore(sess, path)
-            log("model restored")
+        # path = './model/'
+        # if os.path.exists(path):
+        #     saver.restore(sess, path)
+        saver.restore(sess, "model.ckpt")
+        log("model restored")
 
         # training the MLP
         #print("input data : {0}".format(test_data))
@@ -259,7 +239,7 @@ def predict(test_data) :
         log("result : {0}".format(y))
         log("result : {0}".format(np.argmax(y)))
 
-    except Exception as e :
+    except Exception as e:
         raise Exception ("error on training: {0}".format(e))
     finally :
         sess.close()
@@ -360,10 +340,7 @@ if __name__=='__main__':
             # Create Session
             sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth =True)))
             # create graph
-            if(filter_type == 'single') :
-                accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1 = create_s_graph(train=True)
-            else :
-                accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1 = create_m_graph(train=True)
+            accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1 = create_m_graph(train=True)
 
             # set saver
             saver = tf.train.Saver(tf.all_variables())
@@ -371,7 +348,7 @@ if __name__=='__main__':
             sess.run(tf.global_variables_initializer())
 
             # training the MLP
-            for i in range(500):
+            for i in range(300):
                 sess.run(train_step, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 0.7})
                 if i%10 == 0:
                     train_accuracy = sess.run(accuracy, feed_dict={x:data_filter_train, y_target: labels_train, keep_prob: 1})
@@ -385,11 +362,11 @@ if __name__=='__main__':
             #show_layer(weight_vectors)
 
             # Save Model
-            path = './model/'
-            if not os.path.exists(path):
-                os.makedirs(path)
-                log("path created")
-            saver.save(sess, path)
+            # path = './model/'
+            # if not os.path.exists(path):
+            #     os.makedirs(path)
+            #     log("path created")
+            saver.save(sess, "model.ckpt")
             log("model saved")
         except Exception as e:
             raise Exception ("error on training: {0}".format(e))
