@@ -8,9 +8,9 @@ from konlpy.tag import Mecab, Twitter
 from matplotlib.image import imread, imsave
 import matplotlib.pyplot as plt
 from gensim.models import word2vec
-import os, sys
+import os, os.path
+import sys
 import time
-import telepot
 from pprint import pprint
 
 
@@ -39,6 +39,8 @@ num_filters = len(filter_sizes)
 # pos tagger
 pos_tagger = Mecab('/usr/local/lib/mecab/dic/mecab-ko-dic') #0.971 & fast
 #pos_tagger = Twitter() #0.949 & slow
+
+MODEL_PATH = "./model.ckpt"
 
 
 def log(*args):
@@ -75,7 +77,7 @@ def train_vector_model(data_list):
     model.train(morphs, total_examples=len(str_buf), epochs=50)
     return model
 
-def load_csv(data_path):
+def load_data(data_path):
     df_csv_read = pd.DataFrame(data_path)
     return df_csv_read
 
@@ -192,46 +194,33 @@ def create_m_graph(train=True):
 
     return accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1
 
-def show_layer(weight_list):
-    if(filter_type == 'multi') :
-        show = np.array(weight_list).reshape(num_filters, filter_sizes[np.argmax(filter_sizes)], vector_size)
-        for i, matrix in enumerate(show) :
-            fig = plt.figure()
-            plt.imshow(matrix)
-        plt.show()
-    else :
-        show = np.array(weight_list).reshape(32, 2, 2)
-        for i, matrix in enumerate(show) :
-            fig = plt.figure()
-            plt.imshow(matrix)
-        plt.show()
-
 def get_test_data():
-    train_data, train_label = embed(load_csv(train_data_list))
-    test_data, test_label = embed(load_csv(train_data_list))
+    train_data, train_label = embed(load_data(train_data_list))
+    test_data, test_label = embed(load_data(train_data_list))
     return train_label, test_label, train_data, test_data
 
 def predict(test_data):
     try :
         # reset Graph
         tf.reset_default_graph()
-        # Create Session
-        sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth =True)))
+
         # create graph
         _, x, _, _, _, y, _, _ = create_m_graph(train=False)
-
-        # initialize the variables
-        sess.run(tf.global_variables_initializer())
 
         # set saver
         saver = tf.train.Saver()
 
+        # Create Session
+        sess = tf.Session()
+
+        # initialize the variables
+        #sess.run(tf.global_variables_initializer())
+
         # Restore Model
-        # path = './model/'
-        # if os.path.exists(path):
-        #     saver.restore(sess, path)
-        saver.restore(sess, "model.ckpt")
-        log("model restored")
+        saver.restore(sess, MODEL_PATH)
+
+        #saver = tf.train.import_meta_graph(MODEL_PATH+'.meta')
+        #saver.restore(sess, tf.train.latest_checkpoint('./'))
 
         # training the MLP
         #print("input data : {0}".format(test_data))
@@ -246,150 +235,110 @@ def predict(test_data):
 
     return np.argmax(y)
 
-def handleMessage(msg):
-    content_type, chat_type, chat_id = telepot.glance(msg)
-    if content_type != 'text':
-        sendMessage(chat_id, '난 텍스트 이외의 메시지는 처리하지 못해요.')
-        return
 
+# data.tsv는 아래와 같은 "speech_act \t 예문" 형식이어야 함.
+#다중검색    여러 상품 찾기
+#행사상품문의  행사 상품만 알림 받고 싶어요
+df = pd.DataFrame.from_csv('data.tsv', sep='\t', header=None)
+
+# speech_act distinct count check
+count = df.groupby(0).count()
+print( count )
+y_size = count.size
+
+train_data_list = {
+    'encode':[],
+    'decode':[]
+}
+y_dic = {}
+y_inv_list = []
+for index, row in df.iterrows():
+    x = row[1]
+    y = index
+
+    # $제거 - 여기서는 별로 쓸모없으니
+    x = x.replace('$', '')
+
+    # ,로 여러개가 입력되면 뒤에걸로 mapping하자
+    if y.find(',')>-1:
+        y = y.split(',')[-1]
+    print(x, y)
     try:
-        name = msg["from"]["last_name"] + msg["from"]["first_name"]
-    except:
-        name = ""
+        y_dic[y] += 1
+    except KeyError:
+        y_dic[y] = 1
+        y_inv_list.append(y)
 
-    text = msg['text']
-    log( chat_id, name, text )
+    train_data_list['encode'].append(x)
+    train_data_list['decode'].append(y_inv_list.index(y))
 
-    y_index = predict(np.array(inference_embed(text)).flatten())
-    msg = y_inv_list[y_index]
-    print( msg )
-    bot.sendMessage(chat_id, msg)
+label_size = len(y_inv_list)
+print( y_inv_list )
 
+# train_data_list = {
+# 	'encode' : ['판교에 오늘 피자 주문해줘',
+# 		'오늘 날짜에 호텔 예약 해줄레',
+# 		'바이킹스와프 예약할래',
+# 		'내일 집에서 쉴래',
+# 		'모래 날짜에 판교 여행 정보 알려줘'],
+# 	'decode' : [0, 1, 2, 3, 4]
+# }
+# log( train_data_list.get('encode') )
 
-if __name__=='__main__':
-    # data.tsv는 아래와 같은 "speech_act \t 예문" 형식이어야 함.
-    #다중검색    여러 상품 찾기
-    #행사상품문의  행사 상품만 알림 받고 싶어요
-    df = pd.DataFrame.from_csv('data.tsv', sep='\t', header=None)
+model = train_vector_model(train_data_list)
+log(model)
 
-    # speech_act distinct count check
-    count = df.groupby(0).count()
-    print( count )
-    y_size = count.size
+bPass = False
 
-    train_data_list = {
-        'encode':[],
-        'decode':[]
+if not os.path.exists(MODEL_PATH+'.meta'):
+    try:
+        # get Data
+        labels_train, labels_test, data_filter_train, data_filter_test = get_test_data()
+        # log(labels_train)
+        # log(labels_test)
+        # log(data_filter_train)
+        # log(data_filter_test)
+
+        # reset Graph
+        tf.reset_default_graph()
+
+        # Create Session
+        sess = tf.Session()
+        # create graph
+        accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1 = create_m_graph(train=True)
+
+        # set saver
+        saver = tf.train.Saver()
+
+        # initialize the variables
+        sess.run(tf.global_variables_initializer())
+
+        # training the MLP
+        for i in range(300):
+            sess.run(train_step, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 0.7})
+            if i%10 == 0:
+                train_accuracy = sess.run(accuracy, feed_dict={x:data_filter_train, y_target: labels_train, keep_prob: 1})
+                log("step %d, training accuracy: %.3f"%(i, train_accuracy))
+
+        # for given x, y_target data set
+        log("test accuracy: %g"% sess.run(accuracy, feed_dict={x:data_filter_test, y_target: labels_test, keep_prob: 1}))
+
+        # show weight matrix as image
+        #weight_vectors = sess.run(W_conv1, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 1.0})
+
+        # save Model
+        save_path = saver.save(sess, MODEL_PATH)
+        log("model saved:", save_path)
+
+    except Exception as e:
+        raise Exception ("error on training: {0}".format(e))
+    finally:
+        sess.close()
+
+def parse(sentence):
+    y_index = predict(np.array(inference_embed(sentence)).flatten())
+    nlu_result = {
+        "intent":y_inv_list[y_index]
     }
-    y_dic = {}
-    y_inv_list = []
-    for index, row in df.iterrows():
-        x = row[1]
-        y = index
 
-        # $제거 - 여기서는 별로 쓸모없으니
-        x = x.replace('$', '')
-
-        # ,로 여러개가 입력되면 뒤에걸로 mapping하자
-        if y.find(',')>-1:
-            y = y.split(',')[-1]
-        print(x, y)
-        try:
-            y_dic[y] += 1
-        except KeyError:
-            y_dic[y] = 1
-            y_inv_list.append(y)
-
-        train_data_list['encode'].append(x)
-        train_data_list['decode'].append(y_inv_list.index(y))
-
-    label_size = len(y_inv_list)
-    print( y_inv_list )
-
-    # train_data_list = {
-    # 	'encode' : ['판교에 오늘 피자 주문해줘',
-    # 		'오늘 날짜에 호텔 예약 해줄레',
-    # 		'바이킹스와프 예약할래',
-    # 		'내일 집에서 쉴래',
-    # 		'모래 날짜에 판교 여행 정보 알려줘'],
-    # 	'decode' : [0, 1, 2, 3, 4]
-    # }
-    # log( train_data_list.get('encode') )
-
-    model = train_vector_model(train_data_list)
-    log(model)
-
-    # pass 입력인자가 있으면 훈련과정을 건너뜀.
-    bPass=  False
-    for argv in sys.argv:
-        if argv=='pass':
-            bPass = True
-
-    if not bPass:
-        try:
-            # get Data
-            labels_train, labels_test, data_filter_train, data_filter_test = get_test_data()
-            # log(labels_train)
-            # log(labels_test)
-            # log(data_filter_train)
-            # log(data_filter_test)
-
-            # reset Graph
-            tf.reset_default_graph()
-
-            # Create Session
-            sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth =True)))
-            # create graph
-            accuracy, x, y_target, keep_prob, train_step, y, cross_entropy, W_conv1 = create_m_graph(train=True)
-
-            # set saver
-            saver = tf.train.Saver(tf.all_variables())
-            # initialize the variables
-            sess.run(tf.global_variables_initializer())
-
-            # training the MLP
-            for i in range(300):
-                sess.run(train_step, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 0.7})
-                if i%10 == 0:
-                    train_accuracy = sess.run(accuracy, feed_dict={x:data_filter_train, y_target: labels_train, keep_prob: 1})
-                    log("step %d, training accuracy: %.3f"%(i, train_accuracy))
-
-            # for given x, y_target data set
-            log("test accuracy: %g"% sess.run(accuracy, feed_dict={x:data_filter_test, y_target: labels_test, keep_prob: 1}))
-
-            # show weight matrix as image
-            weight_vectors = sess.run(W_conv1, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 1.0})
-            #show_layer(weight_vectors)
-
-            # Save Model
-            # path = './model/'
-            # if not os.path.exists(path):
-            #     os.makedirs(path)
-            #     log("path created")
-            saver.save(sess, "model.ckpt")
-            log("model saved")
-        except Exception as e:
-            raise Exception ("error on training: {0}".format(e))
-        finally:
-            sess.close()
-
-    # arg가 있으면 토큰이 있다고 생각하고, 없으면 그냥 input으로 동작.
-    if len(sys.argv)>1:
-        TOKEN = sys.argv[1]
-        print('received token :', TOKEN)
-
-        bot = telepot.Bot(TOKEN)
-        pprint( bot.getMe() )
-
-        bot.message_loop(handleMessage)
-        print('Listening...')
-        while 1:
-            time.sleep(10)
-
-    else:
-        while True:
-            text = input("> ")
-            if not text:
-                break
-            y_index = predict(np.array(inference_embed(text)).flatten())
-            print( y_inv_list[y_index] )
+    return nlu_result
