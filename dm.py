@@ -23,7 +23,9 @@ for concept in dts['concepts']:
 dialog_stack = []
 dialog_stack.append( dts['children'][0] ) # add root agency
 
-# build expectation agenda
+# execution plan
+exec_stack = []
+exec_stack.append( dts['children'][0] ) # add root agency
 
 
 # prompt callback function
@@ -45,11 +47,17 @@ def request(agent):
     nlu_result = cbInput()
     pprint(nlu_result)
 
+    # show dialog stack
+    print('dialog stack:', [ dialog['name'] for dialog in dialog_stack ])
+
     # concept mapping
+    # build expectation agenda
 
 
 def execute(agent):
     print('processing execute agent:', agent)
+
+    # do api call or sth
 
 agentRunner = {
     'inform':inform,
@@ -60,30 +68,36 @@ agentRunner = {
 def execute_agent(agent):
     agentRunner.get(agent['agentType'], lambda x:"agent type mismatched")(agent)
 
-"""execute agent on top of the stack"""
+"""execute agent(cy) on top of the stack"""
 def execute_top_agent():
-    global dialog_stack
-    agent = dialog_stack.pop() # eliminate completed agents from stack
+    global exec_stack
+    agent = exec_stack.pop()
+
+    dialog_stack.append(agent)
 
     type = agent['type']
     print('try to execute:', agent['name'], type)
 
     if type == 'agency':
         # if agency, check subagents and append reversely
-        dialog_stack += agent['children'][::-1]
+        exec_stack += agent['children'][::-1]
+        execute_top_agent()
     elif type == 'agent':
         execute_agent(agent)
     else:
         print('Unknown type !')
 
+    # eliminate completed agents from stack
+    dialog_stack.pop()
+
 # execution phase
 def execution_phase():
 
-    while len(dialog_stack)>0:
+    while len(exec_stack)>0:
         # execute agent on top of the stack
         execute_top_agent()
 
         # error handling
         # push focus claiming
 
-    print('dialog_stack is empty.')
+    print('stack is empty.')
