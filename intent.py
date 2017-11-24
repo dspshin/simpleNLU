@@ -288,9 +288,7 @@ print( y_inv_list )
 model = train_vector_model(train_data_list)
 log(model)
 
-bPass = False
-
-if not os.path.exists(MODEL_PATH+'.meta'):
+if True: #not os.path.exists(MODEL_PATH+'.meta'):
     try:
         # get Data
         labels_train, labels_test, data_filter_train, data_filter_test = get_test_data()
@@ -314,7 +312,7 @@ if not os.path.exists(MODEL_PATH+'.meta'):
         sess.run(tf.global_variables_initializer())
 
         # training the MLP
-        for i in range(300):
+        for i in range(50):
             sess.run(train_step, feed_dict={x: data_filter_train, y_target: labels_train, keep_prob: 0.7})
             if i%10 == 0:
                 train_accuracy = sess.run(accuracy, feed_dict={x:data_filter_train, y_target: labels_train, keep_prob: 1})

@@ -8,7 +8,7 @@ import time
 from pprint import pprint
 import numpy as np
 from intent import log
-
+import dm
 
 def handleMessage(msg):
     content_type, chat_type, chat_id = telepot.glance(msg)
@@ -29,6 +29,13 @@ def handleMessage(msg):
 
 	#bot.sendMessage(chat_id, msg)
 
+def handlePrompt(msg):
+	print('>', msg)
+
+def handleInput():
+	sentence = input('>>> ')
+	nlu_result = intent.parse( sentence )
+	return nlu_result
 
 if __name__=='__main__':
 
@@ -45,9 +52,6 @@ if __name__=='__main__':
         while 1:
             time.sleep(10)
     else:
-	    while True:
-	        sentence = input('> ')
-	        print( '입력:', sentence )
-
-	        nlu_result = intent.parse( sentence )
-	        pprint( nlu_result )
+	    dm.cbPrompt = handlePrompt
+	    dm.cbInput = handleInput
+	    dm.execution_phase()

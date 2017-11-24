@@ -1,0 +1,42 @@
+{
+    "name":"simple test",
+    "concepts":[
+        {
+            "name":"answer",
+            "type":"string"
+        }
+    ],
+    "children":[
+        {
+            "type":"agency",
+            "name":"agency1",
+            "children":[
+                {
+                    "type":"agent",
+                    "name":"welcome",
+                    "agentType":"inform",
+                    "prompt":"text text"
+                },
+                {
+                    "type":"agent",
+                    "name":"request to user",
+                    "agentType":"request",
+                    "prompt":"text 2222",
+                    "mapping":"answer"
+                },
+                {
+                    "type":"agent",
+                    "name":"confirm",
+                    "agentType":"inform",
+                    "prompt":"text 3333"
+                },
+                {
+                    "type":"agent",
+                    "name":"execute the result",
+                    "agentType":"execute",
+                    "inputParam":"answer"
+                }
+            ]
+        }
+    ]
+}
